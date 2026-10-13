@@ -35,9 +35,10 @@ const schema = z.object({
   R2_PUBLIC_BASE_URL: z.string().url().optional(),
   R2_KEY_PREFIX: z.string().default('italiancoffee'),
 
-  // "console" logs the reset link (development only); "smtp" sends real mail.
-  MAIL_TRANSPORT: z.enum(['console', 'smtp', 'none']).default('none'),
-  SMTP_URL: z.string().optional(),
+  // "resend" sends real mail through Resend; "console" logs it (development only); "none" sends nothing.
+  MAIL_TRANSPORT: z.enum(['resend', 'console', 'none']).default('none'),
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_REPLY_TO: z.string().email().optional(),
   MAIL_FROM: z.string().default('Italian Coffee <no-reply@localhost>'),
 
   // Optional bootstrap so the first super-admin can exist without Firestore data.
@@ -58,6 +59,9 @@ export function loadEnv(source = process.env) {
   if (env.COOKIE_SAMESITE === 'none' && env.NODE_ENV !== 'production') {
     // SameSite=None requires Secure; browsers reject it on plain http.
     env.warnings = ['COOKIE_SAMESITE=none needs HTTPS; it will not work on http://localhost'];
+  }
+  if (env.MAIL_TRANSPORT === 'resend' && !env.RESEND_API_KEY) {
+    throw new Error('RESEND_API_KEY is required when MAIL_TRANSPORT=resend');
   }
   if (env.NODE_ENV === 'production' && env.MAIL_TRANSPORT === 'console') {
     throw new Error('MAIL_TRANSPORT=console is not allowed in production');

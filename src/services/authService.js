@@ -4,6 +4,8 @@ import { env } from '../config/env.js';
 import { sendMail } from '../config/mailer.js';
 import { randomToken, sha256 } from '../utils/crypto.js';
 import { normalizeEmail } from '../utils/ids.js';
+import { passwordChangedEmail, resetPasswordEmail } from '../utils/emailTemplates.js';
+import { logger } from '../config/logger.js';
 import { HttpError, conflict, unauthorized } from '../utils/httpError.js';
 
 const hashPassword = (plain) => bcrypt.hash(plain, env.BCRYPT_ROUNDS);
@@ -126,11 +128,12 @@ export async function requestPasswordReset(emailInput) {
     },
   });
   const link = `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
-  await sendMail({
-    to: user.email,
-    subject: 'Reset your Italian Coffee password',
-    text: `Hello ${user.firstName},\n\nUse the link below to choose a new password. It expires in 1 hour.\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
-  });
+  // A mail failure must not change the response, or it would reveal that the account exists.
+  try {
+    await sendMail({ to: user.email, ...resetPasswordEmail({ firstName: user.firstName, link }) });
+  } catch (err) {
+    logger.error({ err: err.message }, 'password reset email failed');
+  }
 }
 
 export async function resetPassword(token, newPassword) {
@@ -150,6 +153,17 @@ export async function resetPassword(token, newPassword) {
     data: { passwordHash: await hashPassword(newPassword) },
   });
   await destroyAllSessions('user', record.subjectId);
+  await notifyPasswordChanged(await prisma.user.findUnique({ where: { id: record.subjectId } }));
+}
+
+/** Best-effort security notice; never blocks or fails the request. */
+async function notifyPasswordChanged(account) {
+  if (!account?.email) return;
+  try {
+    await sendMail({ to: account.email, ...passwordChangedEmail({ firstName: account.firstName ?? 'there' }) });
+  } catch (err) {
+    logger.error({ err: err.message }, 'password-changed notification failed');
+  }
 }
 
 export async function changePassword(auth, currentPassword, newPassword) {
@@ -168,4 +182,5 @@ export async function changePassword(auth, currentPassword, newPassword) {
   await prisma.session.deleteMany({
     where: { subjectType: auth.type, subjectId: auth.id, NOT: { id: auth.sessionId } },
   });
+  await notifyPasswordChanged(subject);
 }
