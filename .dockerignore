@@ -1,0 +1,11 @@
+node_modules
+export
+reports
+tests
+.env
+.env.*
+!.env.example
+*.log
+.git
+docker-compose.yml
+vitest.config.js

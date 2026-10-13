@@ -1,0 +1,374 @@
+// Prisma schema for MongoDB.
+// Prisma 6.19 is intentionally pinned: Prisma 7 has no MongoDB connector and
+// Prisma 8 MongoDB support is still release-candidate (see docs/mongodb-data-model.md).
+//
+// Sync with:  npx prisma db push      (Prisma Migrate does not support MongoDB)
+// Requires a MongoDB replica set (a single-node replica set is fine) because
+// Prisma wraps writes in transactions.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+/// Storefront customer (replaces Firebase Auth user + `users` Firestore doc).
+model User {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique // always stored lower-cased + trimmed
+  /// null => imported from Firebase and must set a password via "forgot password".
+  passwordHash     String?
+  firstName        String
+  lastName         String
+  phone            String?
+  address          String?
+  zipCode          String?
+  deliveryAddress  Boolean   @default(false)
+  disabled         Boolean   @default(false)
+  legacyFirebaseUid String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  reviews Review[]
+
+  @@index([legacyFirebaseUid])
+}
+
+/// Back-office administrator (replaces the plaintext-password `admins` collection).
+model Admin {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  /// "admin" | "superadmin"
+  role             String    @default("admin")
+  disabled         Boolean   @default(false)
+  /// true for admins imported from Firestore: their old password was exposed
+  /// in a client-readable database and must be rotated at first login.
+  mustChangePassword Boolean @default(false)
+  legacyFirebaseId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([legacyFirebaseId])
+}
+
+/// Server-side session. The cookie holds an opaque random token; only its
+/// SHA-256 hash is stored.
+model Session {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  tokenHash   String   @unique
+  csrfToken   String
+  /// "user" | "admin"
+  subjectType String
+  subjectId   String   @db.ObjectId
+  userAgent   String?
+  ip          String?
+  createdAt   DateTime @default(now())
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+
+  @@index([subjectType, subjectId])
+  @@index([expiresAt])
+}
+
+model PasswordReset {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  tokenHash   String    @unique
+  subjectType String
+  subjectId   String    @db.ObjectId
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([subjectType, subjectId])
+}
+
+// ───────────────────────────── Catalogue ────────────────────────────
+
+type Product {
+  /// Stable id so carts do not depend on array position.
+  productId    String
+  name         String
+  price        Float
+  currency     String   @default("€")
+  rate         Float?
+  /// Single display image read by the storefront (legacy `image`).
+  image        String?
+  images       String[]
+  videos       String[]
+  description  String?
+  quantity     String?
+  intensity    String?
+  weight       String?
+  profile      String?
+  origin       String?
+  preparation  String?
+  roast        String?
+  area         String?
+  bestBefore   String?
+  roastingDate String?
+  visibility   Boolean  @default(true)
+}
+
+type GlobalPresence {
+  name      String?
+  value     String?
+  label     String?
+  latitude  Float?
+  longitude Float?
+}
+
+type Social {
+  type String
+  link String
+}
+
+type TypeRef {
+  typeName  String
+  typeImage String?
+  icon      String?
+}
+
+model Manufacturer {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  company     String
+  /// lower-cased trimmed company, the join key used by the legacy settings docs.
+  companyKey  String
+  province    String?
+  /// Read by the storefront filter panel (legacy fields, optional).
+  category    String?
+  region      String?
+  manufacturerCountry String?
+  address     String?
+  website     String?
+  email       String?
+  contact     String?
+  logo        String?
+  logoSmall   String?
+  youtubeLink String?
+  whatsappLink String?
+  profitProject String?
+  deliveryLink String?
+  processing  String?
+  year        String?
+  history     String?
+  shipping    String?
+  newsletter  String?
+  legal       String?
+  team        String?
+  faq         String?
+  cookies     String?
+  privacyPolicy  String?
+  termsCondition String?
+  awardWinners   String?
+  intlCertification String[]
+  createdBy   String?
+
+  /// Admin-entered baseline rating (0–5); computed review stats are separate.
+  companyRate Float   @default(0)
+  academy     Boolean @default(false)
+  blog        Boolean @default(false)
+  sustainability Boolean @default(false)
+  salesOnline Boolean @default(false)
+  visibility  Boolean @default(true)
+  coffeeBeansVisibility        Boolean @default(true)
+  compatibleCapsuleVisibility  Boolean @default(true)
+  esePodsVisibility            Boolean @default(true)
+  grindedCoffeeVisibility      Boolean @default(true)
+
+  /// Explicit WGS84 coordinates (legacy `position` array was ambiguous).
+  latitude    Float?
+  longitude   Float?
+
+  gallery        String[]
+  rangeProducts  String[]
+  merchandise    String[]
+  otherBrands    String[]
+  notOnlyCoffee  String[]
+  global         GlobalPresence[]
+  socials        Social[]
+  manufacturerType TypeRef[]
+
+  products           Product[]
+  coffeeBeans        Product[]
+  compatibleCapsules Product[]
+  esePods            Product[]
+  grindedCoffee      Product[]
+
+  /// Denormalised review stats (kept in the same transaction as the Review insert).
+  reviewCount   Int   @default(0)
+  /// Reviews with a star rating >= 1 (a 0 means "no rating given").
+  ratingCount   Int   @default(0)
+  ratingSum     Float @default(0)
+
+  legacyFirebaseId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reviews Review[]
+  countrySetting  CountrySetting?
+  currencySetting CurrencySetting?
+  paymentSetting  PaymentSetting?
+  deliverySetting DeliverySetting?
+
+  @@index([companyKey])
+  @@index([province])
+  @@index([createdAt])
+  @@index([legacyFirebaseId])
+}
+
+/// Reviews live in their own collection: unbounded, concurrently written.
+model Review {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  manufacturerId String       @db.ObjectId
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  userId         String?      @db.ObjectId
+  user           User?        @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  legacyUid      String?
+  name           String
+  comment        String
+  rate           Int
+  createdAt      DateTime     @default(now())
+
+  @@index([manufacturerId, createdAt])
+  @@index([userId])
+}
+
+// ───────────────────── Admin-managed filter lists ───────────────────
+
+model Tag {
+  id  String @id @default(auto()) @map("_id") @db.ObjectId
+  tag String
+  key String @unique
+  legacyFirebaseId String?
+  createdAt DateTime @default(now())
+}
+
+model Category {
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
+  category String
+  key      String @unique
+  legacyFirebaseId String?
+  createdAt DateTime @default(now())
+}
+
+model Region {
+  id     String @id @default(auto()) @map("_id") @db.ObjectId
+  region String
+  key    String @unique
+  legacyFirebaseId String?
+  createdAt DateTime @default(now())
+}
+
+model ManufacturerType {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  typeName  String
+  key       String  @unique
+  typeImage String?
+  legacyFirebaseId String?
+  createdAt DateTime @default(now())
+}
+
+// ───────────── Per-manufacturer settings (one doc per manufacturer) ─────────────
+
+type CurrencyItem {
+  name   String
+  symbol String
+  rate   Float
+}
+
+type DeliveryItem {
+  name        String
+  timeFrame   String
+  price       Float
+  serviceType String?
+}
+
+model CountrySetting {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  manufacturerId String       @unique @db.ObjectId
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  country        String[]
+  legacyFirebaseId String?
+  updatedAt      DateTime     @updatedAt
+}
+
+model CurrencySetting {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  manufacturerId String       @unique @db.ObjectId
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  currency       CurrencyItem[]
+  legacyFirebaseId String?
+  updatedAt      DateTime     @updatedAt
+}
+
+model PaymentSetting {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  manufacturerId String       @unique @db.ObjectId
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  payment        String[]
+  legacyFirebaseId String?
+  updatedAt      DateTime     @updatedAt
+}
+
+model DeliverySetting {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  manufacturerId String       @unique @db.ObjectId
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id], onDelete: Cascade)
+  delivery       DeliveryItem[]
+  legacyFirebaseId String?
+  updatedAt      DateTime     @updatedAt
+}
+
+// ───────────────────────── Storefront state ─────────────────────────
+
+model Subscriber {
+  id    String   @id @default(auto()) @map("_id") @db.ObjectId
+  email String   @unique
+  legacyFirebaseId String?
+  createdAt DateTime @default(now())
+}
+
+type CartItem {
+  itemId         String
+  manufacturerId String
+  section        String
+  productId      String
+  /// Snapshot taken server-side at add time (the UI renders item.product.*).
+  product        Json
+  quantity       Int
+  currency       String
+  sum            Float
+  addedAt        DateTime
+}
+
+model Cart {
+  id        String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String     @unique @db.ObjectId
+  items     CartItem[]
+  legacyFirebaseUid String?
+  updatedAt DateTime   @updatedAt
+}
+
+/// Migration ledger: one row per imported source document => idempotent reruns.
+model MigrationLedger {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// `${collection}:${legacyId}`
+  sourceKey  String   @unique
+  collection String
+  legacyId   String
+  targetModel String
+  targetId   String
+  checksum   String
+  importedAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([collection])
+}

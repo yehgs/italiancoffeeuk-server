@@ -1,0 +1,28 @@
+import { Router } from 'express';
+import health from './health.routes.js';
+import auth from './auth.routes.js';
+import manufacturers from './manufacturers.routes.js';
+import admins from './admins.routes.js';
+import subscribers from './subscribers.routes.js';
+import cart from './cart.routes.js';
+import uploads from './uploads.routes.js';
+import { filterRouter } from './filters.routes.js';
+import { settingsRouter } from './settings.routes.js';
+
+const api = Router();
+api.use('/health', health);
+api.use('/auth', auth);
+api.use('/manufacturers', manufacturers);
+api.use('/tags', filterRouter('tags'));
+api.use('/categories', filterRouter('categories'));
+api.use('/regions', filterRouter('regions'));
+api.use('/manufacturer-types', filterRouter('manufacturer-types'));
+api.use('/countries', settingsRouter('countries'));
+api.use('/currencies', settingsRouter('currencies'));
+api.use('/payments', settingsRouter('payments'));
+api.use('/deliveries', settingsRouter('deliveries'));
+api.use('/admins', admins);
+api.use('/subscribers', subscribers);
+api.use('/cart', cart);
+api.use('/uploads', uploads);
+export default api;
