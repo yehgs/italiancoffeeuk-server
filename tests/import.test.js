@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../src/config/prisma.js';
 import { runImport } from '../src/migration/importer.js';
@@ -127,6 +127,18 @@ describe('Firestore import', () => {
     for (const model of ['manufacturer', 'review', 'user', 'admin', 'tag', 'subscriber', 'migrationLedger']) {
       expect(prisma[model].__rows(), model).toHaveLength(0);
     }
+  });
+
+  it('dry run only sends well-formed ObjectIds to MongoDB (a text placeholder crashes the real driver)', async () => {
+    const seen = [];
+    for (const model of ['countrySetting', 'currencySetting', 'paymentSetting', 'deliverySetting']) {
+      const orig = prisma[model].findUnique.bind(prisma[model]);
+      vi.spyOn(prisma[model], 'findUnique').mockImplementation((args) => { seen.push(args.where.manufacturerId); return orig(args); });
+    }
+    await run({ dryRun: true });
+    expect(seen.length).toBeGreaterThan(0);
+    for (const id of seen) expect(id).toMatch(/^[0-9a-f]{24}$/);
+    vi.restoreAllMocks();
   });
 
   it('--only restricts the collections, and dependent phases still resolve existing data', async () => {

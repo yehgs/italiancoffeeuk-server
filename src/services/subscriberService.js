@@ -15,6 +15,15 @@ export async function subscribe(emailInput) {
   }
 }
 
+/**
+ * Public unsubscribe. Always resolves the same way whether or not the address was
+ * subscribed, so the endpoint cannot be used to discover who is on the list.
+ */
+export async function unsubscribe(emailInput) {
+  const email = normalizeEmail(emailInput);
+  await prisma.subscriber.deleteMany({ where: { email } });
+}
+
 export async function listSubscribers({ page, limit }) {
   const [rows, total] = await Promise.all([
     prisma.subscriber.findMany({ orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit }),

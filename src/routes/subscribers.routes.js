@@ -10,6 +10,10 @@ const router = Router();
 router.post('/', subscribeLimiter, validate({ body: subscriberBody }), async (req, res) =>
   created(res, await svc.subscribe(req.valid.body.email)),
 );
+router.post('/unsubscribe', subscribeLimiter, validate({ body: subscriberBody }), async (req, res) => {
+  await svc.unsubscribe(req.valid.body.email);
+  res.json({ data: { ok: true } });
+});
 router.get('/', requireAdmin, validate({ query: pageQuery }), async (req, res) => {
   const { items, total } = await svc.listSubscribers(req.valid.query);
   res.json(paged(items, total, req.valid.query));
