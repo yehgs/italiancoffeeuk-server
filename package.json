@@ -16,6 +16,7 @@
     "migrate:export": "node scripts/export-firestore.js",
     "migrate:import": "node --env-file-if-exists=.env scripts/import-firestore.js",
     "migrate:verify": "node --env-file-if-exists=.env scripts/verify-import.js",
+    "mail:test": "node --env-file-if-exists=.env scripts/mail-test.js",
     "test": "vitest run",
     "lint": "node --check src/server.js"
   },

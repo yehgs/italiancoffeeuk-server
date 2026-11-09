@@ -143,7 +143,7 @@ export async function requestPasswordReset(emailInput, type = 'user') {
       ...resetPasswordEmail({ firstName: account.firstName || 'there', link, admin: type === 'admin' }),
     });
   } catch (err) {
-    logger.error({ err: err.message }, 'password reset email failed');
+    logger.error({ err: err.message, mail: err.info }, 'password reset email failed');
   }
 }
 

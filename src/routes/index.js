@@ -7,6 +7,7 @@ import subscribers from './subscribers.routes.js';
 import cart from './cart.routes.js';
 import uploads from './uploads.routes.js';
 import { filterRouter } from './filters.routes.js';
+import system from './system.routes.js';
 import { settingsRouter } from './settings.routes.js';
 
 const api = Router();
@@ -22,6 +23,7 @@ api.use('/currencies', settingsRouter('currencies'));
 api.use('/payments', settingsRouter('payments'));
 api.use('/deliveries', settingsRouter('deliveries'));
 api.use('/admins', admins);
+api.use('/system', system);
 api.use('/subscribers', subscribers);
 api.use('/cart', cart);
 api.use('/uploads', uploads);

@@ -1,3 +1,4 @@
+import { assertMailDeliverable } from '../config/mailHealth.js';
 import { Router } from 'express';
 import { env } from '../config/env.js';
 import { validate } from '../middleware/validate.js';
@@ -74,6 +75,7 @@ router.get('/me', (req, res) => {
 });
 
 router.post('/forgot-password', passwordResetLimiter, validate({ body: schemas.forgotBody }), async (req, res) => {
+  await assertMailDeliverable();
   await auth.requestPasswordReset(req.valid.body.email);
   // identical response whether or not the account exists
   ok(res, { message: 'If an account exists for that email, a reset link has been sent.' }, undefined, 202);
@@ -85,6 +87,7 @@ router.post('/reset-password', passwordResetLimiter, validate({ body: schemas.re
 });
 
 router.post('/admin/forgot-password', passwordResetLimiter, validate({ body: schemas.forgotBody }), async (req, res) => {
+  await assertMailDeliverable();
   await auth.requestPasswordReset(req.valid.body.email, 'admin');
   // identical response whether or not an admin account exists for that email
   ok(res, { message: 'If an admin account exists for that email, a reset link has been sent.' }, undefined, 202);

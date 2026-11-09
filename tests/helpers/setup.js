@@ -11,7 +11,7 @@ process.env.CORS_ORIGINS = 'http://localhost:3000';
 process.env.FRONTEND_URL = 'http://localhost:3000';
 process.env.LOG_LEVEL = 'silent';
 process.env.BCRYPT_ROUNDS = '10';
-process.env.MAIL_TRANSPORT = 'none';
+process.env.MAIL_TRANSPORT = 'console';
 
 import { vi, beforeEach } from 'vitest';
 
