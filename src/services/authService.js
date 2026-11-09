@@ -114,46 +114,62 @@ export async function verifyAdmin(emailInput, password) {
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 
-/** Always resolves, whether or not the account exists (no enumeration). */
-export async function requestPasswordReset(emailInput) {
-  const user = await prisma.user.findUnique({ where: { email: normalizeEmail(emailInput) } });
-  if (!user || user.disabled) return;
+const RESET_PATH = { user: '/reset-password', admin: '/admin-reset-password' };
+const modelFor = (type) => (type === 'admin' ? prisma.admin : prisma.user);
+
+/**
+ * Always resolves, whether or not the account exists (no enumeration).
+ * `type` is 'user' (customers) or 'admin'; a link made for one can never reset the other.
+ */
+export async function requestPasswordReset(emailInput, type = 'user') {
+  const account = await modelFor(type).findUnique({ where: { email: normalizeEmail(emailInput) } });
+  if (!account || account.disabled) return;
+  // Only the newest link should work.
+  await prisma.passwordReset.deleteMany({ where: { subjectType: type, subjectId: account.id } });
   const token = randomToken(32);
   await prisma.passwordReset.create({
     data: {
       tokenHash: sha256(token),
-      subjectType: 'user',
-      subjectId: user.id,
+      subjectType: type,
+      subjectId: account.id,
       expiresAt: new Date(Date.now() + RESET_TTL_MS),
     },
   });
-  const link = `${env.FRONTEND_URL.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+  const link = `${env.FRONTEND_URL.replace(/\/$/, '')}${RESET_PATH[type]}?token=${encodeURIComponent(token)}`;
   // A mail failure must not change the response, or it would reveal that the account exists.
   try {
-    await sendMail({ to: user.email, ...resetPasswordEmail({ firstName: user.firstName, link }) });
+    await sendMail({
+      to: account.email,
+      ...resetPasswordEmail({ firstName: account.firstName || 'there', link, admin: type === 'admin' }),
+    });
   } catch (err) {
     logger.error({ err: err.message }, 'password reset email failed');
   }
 }
 
-export async function resetPassword(token, newPassword) {
+export async function resetPassword(token, newPassword, type = 'user') {
+  const invalid = () => new HttpError(400, 'INVALID_RESET_TOKEN', 'This reset link is invalid or has expired');
   const record = await prisma.passwordReset.findUnique({ where: { tokenHash: sha256(token) } });
-  if (!record || record.usedAt || record.expiresAt <= new Date()) {
-    throw new HttpError(400, 'INVALID_RESET_TOKEN', 'This reset link is invalid or has expired');
-  }
+  if (!record || record.subjectType !== type || record.usedAt || record.expiresAt <= new Date()) throw invalid();
+  const account = await modelFor(type).findUnique({ where: { id: record.subjectId } });
+  if (!account || account.disabled) throw invalid();
   // Claim the token atomically so it can only be used once.
   const claimed = await prisma.passwordReset.updateMany({
     // MongoDB: a never-written optional field is *missing*, not null, so match both.
     where: { id: record.id, OR: [{ usedAt: null }, { usedAt: { isSet: false } }] },
     data: { usedAt: new Date() },
   });
-  if (claimed.count !== 1) throw new HttpError(400, 'INVALID_RESET_TOKEN', 'This reset link is invalid or has expired');
-  await prisma.user.update({
-    where: { id: record.subjectId },
-    data: { passwordHash: await hashPassword(newPassword) },
+  if (claimed.count !== 1) throw invalid();
+  await modelFor(type).update({
+    where: { id: account.id },
+    data: {
+      passwordHash: await hashPassword(newPassword),
+      // the person chose this password themselves, so no forced change is needed
+      ...(type === 'admin' ? { mustChangePassword: false } : {}),
+    },
   });
-  await destroyAllSessions('user', record.subjectId);
-  await notifyPasswordChanged(await prisma.user.findUnique({ where: { id: record.subjectId } }));
+  await destroyAllSessions(type, account.id);
+  await notifyPasswordChanged(account);
 }
 
 /** Best-effort security notice; never blocks or fails the request. */

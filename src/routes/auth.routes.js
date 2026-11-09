@@ -84,6 +84,17 @@ router.post('/reset-password', passwordResetLimiter, validate({ body: schemas.re
   ok(res, { message: 'Password updated. Please sign in.' });
 });
 
+router.post('/admin/forgot-password', passwordResetLimiter, validate({ body: schemas.forgotBody }), async (req, res) => {
+  await auth.requestPasswordReset(req.valid.body.email, 'admin');
+  // identical response whether or not an admin account exists for that email
+  ok(res, { message: 'If an admin account exists for that email, a reset link has been sent.' }, undefined, 202);
+});
+
+router.post('/admin/reset-password', passwordResetLimiter, validate({ body: schemas.adminResetBody }), async (req, res) => {
+  await auth.resetPassword(req.valid.body.token, req.valid.body.newPassword, 'admin');
+  ok(res, { message: 'Password updated. Please sign in.' });
+});
+
 router.post('/change-password', requireAuth(), validate({ body: schemas.changePasswordBody }), async (req, res) => {
   const { currentPassword, newPassword } = req.valid.body;
   // admins have a stricter policy than customers

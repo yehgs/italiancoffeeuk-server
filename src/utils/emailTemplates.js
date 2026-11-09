@@ -8,9 +8,9 @@ function layout(title, bodyHtml) {
 <p style="font-size:12px;color:#8a7a70;margin:24px 0 0">Italian Coffee UK</p></td></tr></table></td></tr></table></body></html>`;
 }
 
-export function resetPasswordEmail({ firstName, link }) {
+export function resetPasswordEmail({ firstName, link, admin = false }) {
   return {
-    subject: 'Reset your Italian Coffee password',
+    subject: admin ? 'Reset your Italian Coffee admin password' : 'Reset your Italian Coffee password',
     text: `Hello ${firstName},\n\nUse the link below to choose a new password. It expires in 1 hour.\n\n${link}\n\nIf you did not request this, you can ignore this email.`,
     html: layout('Reset your password', `<p>Hello ${esc(firstName)},</p>
 <p>Use the button below to choose a new password. The link expires in 1 hour.</p>
