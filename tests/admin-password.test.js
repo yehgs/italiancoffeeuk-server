@@ -22,7 +22,8 @@ describe('forced password change (bootstrap / imported / created admins)', () =>
     const weak = await s.post('/api/auth/change-password').send({ currentPassword: 'Sup3rSecretPass', newPassword: 'short1' });
     expect(weak.status).toBe(400);
     const wrong = await s.post('/api/auth/change-password').send({ currentPassword: 'nope', newPassword: 'Brand9NewAdminPw' });
-    expect(wrong.status).toBe(401);
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error.code).toBe('WRONG_CURRENT_PASSWORD');
     const ok = await s.post('/api/auth/change-password').send({ currentPassword: 'Sup3rSecretPass', newPassword: 'Brand9NewAdminPw' });
     expect(ok.status).toBe(200);
 

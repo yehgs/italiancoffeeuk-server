@@ -46,6 +46,7 @@ function matches(row, where = {}) {
       if ('not' in cond) return v !== cond.not;
       if ('in' in cond) return cond.in.includes(v);
       if ('equals' in cond) return v === cond.equals;
+      if ('lt' in cond) return v < cond.lt;
       if ('has' in cond) return Array.isArray(v) && v.includes(cond.has);
       if ('isSet' in cond) return cond.isSet ? v !== undefined : v === undefined;
       return false;

@@ -6,7 +6,7 @@ import { randomToken, sha256 } from '../utils/crypto.js';
 import { normalizeEmail } from '../utils/ids.js';
 import { passwordChangedEmail, resetPasswordEmail } from '../utils/emailTemplates.js';
 import { logger } from '../config/logger.js';
-import { HttpError, conflict, unauthorized } from '../utils/httpError.js';
+import { HttpError, conflict } from '../utils/httpError.js';
 
 const hashPassword = (plain) => bcrypt.hash(plain, env.BCRYPT_ROUNDS);
 // Compared when the account does not exist so response time doesn't reveal it.
@@ -15,6 +15,8 @@ const DUMMY_HASH = bcrypt.hashSync('not-a-real-password', 10);
 export { hashPassword };
 
 export const INVALID_LOGIN = 'Invalid email or password';
+// 401 but a different code from "no session" (UNAUTHENTICATED) so clients never confuse a wrong password with an expired session.
+const invalidCredentials = () => new HttpError(401, 'INVALID_CREDENTIALS', INVALID_LOGIN);
 
 export function publicUser(u) {
   return {
@@ -99,14 +101,14 @@ export async function registerCustomer(input) {
 export async function verifyCustomer(emailInput, password) {
   const user = await prisma.user.findUnique({ where: { email: normalizeEmail(emailInput) } });
   const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
-  if (!user || !user.passwordHash || !ok || user.disabled) throw unauthorized(INVALID_LOGIN);
+  if (!user || !user.passwordHash || !ok || user.disabled) throw invalidCredentials();
   return user;
 }
 
 export async function verifyAdmin(emailInput, password) {
   const admin = await prisma.admin.findUnique({ where: { email: normalizeEmail(emailInput) } });
   const ok = await bcrypt.compare(password, admin?.passwordHash ?? DUMMY_HASH);
-  if (!admin || !ok || admin.disabled) throw unauthorized(INVALID_LOGIN);
+  if (!admin || !ok || admin.disabled) throw invalidCredentials();
   return admin;
 }
 
@@ -186,7 +188,8 @@ export async function changePassword(auth, currentPassword, newPassword) {
   const model = auth.type === 'admin' ? prisma.admin : prisma.user;
   const subject = await model.findUnique({ where: { id: auth.id } });
   const ok = await bcrypt.compare(currentPassword, subject?.passwordHash ?? DUMMY_HASH);
-  if (!subject || !ok) throw unauthorized('Current password is incorrect');
+  if (!subject || !ok) throw new HttpError(400, 'WRONG_CURRENT_PASSWORD', 'Current password is incorrect');
+  if (currentPassword === newPassword) throw new HttpError(400, 'PASSWORD_UNCHANGED', 'Choose a password different from your current one');
   await model.update({
     where: { id: auth.id },
     data: {
@@ -199,4 +202,12 @@ export async function changePassword(auth, currentPassword, newPassword) {
     where: { subjectType: auth.type, subjectId: auth.id, NOT: { id: auth.sessionId } },
   });
   await notifyPasswordChanged(subject);
+}
+
+
+/** Housekeeping: expired sessions and old reset tokens would otherwise pile up forever. */
+export async function purgeExpired(now = new Date()) {
+  const sessions = await prisma.session.deleteMany({ where: { expiresAt: { lt: now } } });
+  const resets = await prisma.passwordReset.deleteMany({ where: { expiresAt: { lt: new Date(now.getTime() - 24 * 3600_000) } } });
+  return { sessions: sessions.count, resets: resets.count };
 }

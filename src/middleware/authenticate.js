@@ -1,7 +1,7 @@
 import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
 import { sha256, safeEqual } from '../utils/crypto.js';
-import { forbidden, unauthorized } from '../utils/httpError.js';
+import { HttpError, forbidden, unauthorized } from '../utils/httpError.js';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -34,11 +34,15 @@ export async function loadSession(req, _res, next) {
 
 /** Requires a valid session of one of the given types/roles, and a CSRF token on unsafe methods. */
 export const requireAuth =
-  ({ type, roles } = {}) =>
+  ({ type, roles, allowForced = false } = {}) =>
   (req, _res, next) => {
     if (!req.auth) return next(unauthorized());
     if (type && req.auth.type !== type) return next(forbidden());
     if (roles && !roles.includes(req.auth.role)) return next(forbidden());
+    // Imported / seeded / newly created admins must choose their own password before doing anything else.
+    if (!allowForced && req.auth.type === 'admin' && req.auth.subject.mustChangePassword) {
+      return next(new HttpError(403, 'PASSWORD_CHANGE_REQUIRED', 'You must set a new password before using the admin area'));
+    }
     if (!SAFE_METHODS.has(req.method)) {
       const sent = req.get('x-csrf-token');
       if (!sent || !safeEqual(sent, req.auth.csrfToken)) {

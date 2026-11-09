@@ -8,7 +8,7 @@ describe('env validation', () => {
   });
   it('applies safe defaults', () => {
     const e = loadEnv(base);
-    expect(e.COOKIE_SAMESITE).toBe('lax');
+    expect(e.COOKIE_SAMESITE).toBe('auto');
     expect(e.corsOrigins).toEqual(['http://localhost:3000']);
     expect(e.MAIL_TRANSPORT).toBe('none');
   });

@@ -19,6 +19,8 @@ export const loginLimiter = make({
   keyGenerator: (req) => `${ipKeyGenerator(req.ip)}|${String(req.body?.email ?? '').toLowerCase()}`,
   skipSuccessfulRequests: true,
 });
+// A second, per-IP-only net so one address cannot guess passwords across many emails.
+export const loginIpLimiter = make({ windowMs: 15 * 60_000, limit: 60, skipSuccessfulRequests: true });
 export const registerLimiter = make({ windowMs: 60 * 60_000, limit: 20 });
 export const passwordResetLimiter = make({ windowMs: 60 * 60_000, limit: 5 });
 export const subscribeLimiter = make({ windowMs: 60 * 60_000, limit: 10 });

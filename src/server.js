@@ -3,6 +3,7 @@ import { env } from './config/env.js';
 import { logger } from './config/logger.js';
 import { prisma } from './config/prisma.js';
 import { logMailStatus } from './config/mailHealth.js';
+import { purgeExpired } from './services/authService.js';
 import { bootstrapAdmin } from './services/adminService.js';
 
 const app = createApp();
@@ -10,6 +11,9 @@ const app = createApp();
 await prisma.$connect();
 await bootstrapAdmin({ email: env.BOOTSTRAP_ADMIN_EMAIL, password: env.BOOTSTRAP_ADMIN_PASSWORD, logger });
 for (const w of env.warnings ?? []) logger.warn(w);
+const sweep = () => purgeExpired().then((r) => (r.sessions || r.resets) && logger.info(r, 'purged expired sessions/reset tokens')).catch((e) => logger.error({ err: e.message }, 'purge failed'));
+sweep();
+setInterval(sweep, 6 * 3600_000).unref();
 logMailStatus(); // loud, specific log lines if email cannot work (does not block startup)
 
 const server = app.listen(env.PORT, () => logger.info(`API listening on :${env.PORT} (${env.NODE_ENV})`));

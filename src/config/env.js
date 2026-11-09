@@ -19,7 +19,8 @@ const schema = z.object({
   COOKIE_NAME: z.string().default('ic_session'),
   // Use "none" when the API and the site are on different registrable domains
   // (requires HTTPS); "lax" when they share one (e.g. api.example.com + example.com).
-  COOKIE_SAMESITE: z.enum(['lax', 'strict', 'none']).default('lax'),
+  // auto = SameSite=None when the website and API are on different sites, otherwise Lax
+  COOKIE_SAMESITE: z.enum(['auto', 'lax', 'strict', 'none']).default('auto'),
   COOKIE_DOMAIN: z.string().optional(),
   CUSTOMER_SESSION_HOURS: z.coerce.number().positive().default(24 * 7),
   ADMIN_SESSION_HOURS: z.coerce.number().positive().default(12),
@@ -55,6 +56,8 @@ export function loadEnv(source = process.env) {
     throw new Error(`Invalid environment configuration:\n${lines.join('\n')}`);
   }
   const env = parsed.data;
+  // Behind Cloud Run / any single proxy, rate limits must see the real client IP, not the proxy's.
+  if (env.NODE_ENV === 'production' && source.TRUST_PROXY === undefined) env.TRUST_PROXY = 1;
 
   if (env.COOKIE_SAMESITE === 'none' && env.NODE_ENV !== 'production') {
     // SameSite=None requires Secure; browsers reject it on plain http.
