@@ -124,12 +124,12 @@ describe('admin auth + authorisation', () => {
 
 describe('admin management rules', () => {
   const body = { firstName: 'N', lastName: 'A', email: 'n@example.com', password: 'N3wAdminPass1', role: 'admin' };
-  it('creates an admin with a hashed password, forcing a password change', async () => {
+  it('creates an admin with a hashed password and does not force a password change', async () => {
     await seedAdmin();
     const s = await login('admin', { email: 'root@example.com', password: 'Sup3rSecretPass' });
     const res = await s.post('/api/admins').send(body);
     expect(res.status).toBe(201);
-    expect(res.body.data.mustChangePassword).toBe(true);
+    expect(res.body.data.mustChangePassword).toBe(false);
     const stored = prisma.admin.__rows().find((r) => r.email === 'n@example.com');
     expect(stored.passwordHash).toMatch(/^\$2[aby]\$/);
     expect(stored.password).toBeUndefined();

@@ -319,7 +319,7 @@ export async function runImport({ prisma, data, dryRun = false, only, bcryptRoun
             const passwordHash = plain
               ? await bcrypt.hash(plain, bcryptRounds)
               : await bcrypt.hash(crypto.randomBytes(24).toString('base64url'), bcryptRounds);
-            return prisma.admin.create({ data: { ...profile, passwordHash, mustChangePassword: true, legacyFirebaseId: doc.id } });
+            return prisma.admin.create({ data: { ...profile, passwordHash, legacyFirebaseId: doc.id } });
           },
           update: (id) => prisma.admin.update({ where: { id }, data: profile }), // never touches the password
           findExisting: () => prisma.admin.findUnique({ where: { email } }),

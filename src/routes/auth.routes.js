@@ -109,8 +109,7 @@ router.post('/admin/reset-password', passwordResetLimiter, validate({ body: sche
   ok(res, { message: 'Password updated. Please sign in.' });
 });
 
-// allowForced: an admin who must change their password may call this (and only this) before doing so
-router.post('/change-password', requireAuth({ allowForced: true }), validate({ body: schemas.changePasswordBody }), async (req, res) => {
+router.post('/change-password', requireAuth(), validate({ body: schemas.changePasswordBody }), async (req, res) => {
   const { currentPassword, newPassword } = req.valid.body;
   // admins have a stricter policy than customers
   (req.auth.type === 'admin' ? schemas.adminPassword : schemas.customerPassword).parse(newPassword);

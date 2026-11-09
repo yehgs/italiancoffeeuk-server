@@ -21,8 +21,6 @@ export async function createAdmin(body) {
         lastName: body.lastName,
         role: body.role ?? 'admin',
         passwordHash: await hashPassword(body.password),
-        // the creator knows the password, so the new admin must change it
-        mustChangePassword: true,
       },
     });
     return publicAdmin(admin);
@@ -58,7 +56,6 @@ export async function updateAdmin(id, body, actor) {
   }
   if (body.password !== undefined) {
     data.passwordHash = await hashPassword(body.password);
-    data.mustChangePassword = id !== actor.id;
   }
   const updated = await prisma.admin.update({ where: { id }, data });
   if (body.password !== undefined || body.disabled === true || body.role !== undefined) {
@@ -89,7 +86,6 @@ export async function bootstrapAdmin({ email, password, logger }) {
       lastName: 'Admin',
       role: 'superadmin',
       passwordHash: await hashPassword(password),
-      mustChangePassword: true,
     },
   });
   logger?.info('Bootstrapped initial super admin (change the password at first login)');

@@ -63,11 +63,11 @@ describe('Firestore import', () => {
     expect(r.warnings.some((w) => /recovered from the misnamed "currency"/.test(w.message))).toBe(true);
   });
 
-  it('hashes admin passwords, forces a change, and leaks no plaintext anywhere', async () => {
+  it('hashes admin passwords and leaks no plaintext anywhere', async () => {
     const r = await run();
     const ada = await prisma.admin.findUnique({ where: { email: 'ada@example.com' } });
     expect(ada.role).toBe('superadmin');
-    expect(ada.mustChangePassword).toBe(true);
+    expect(ada.mustChangePassword).toBeFalsy();
     expect(await bcrypt.compare('plaintext-secret-1', ada.passwordHash)).toBe(true);
     const everything = JSON.stringify([r, prisma.migrationLedger.__rows(), prisma.admin.__rows().map((a) => ({ ...a, passwordHash: undefined }))]);
     expect(everything).not.toMatch(/plaintext-secret/);

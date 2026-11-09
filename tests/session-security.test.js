@@ -77,18 +77,13 @@ describe('error codes never confuse a wrong password with a missing session', ()
   });
 });
 
-describe('forced password change is enforced by the server', () => {
-  it('blocks every admin API except /me, logout and change-password until the password is changed', async () => {
+describe('password change is optional for admins', () => {
+  it('lets an admin use the admin API without changing the password first', async () => {
     const a = await seedAdmin();
-    await prisma.admin.update({ where: { id: a.id }, data: { mustChangePassword: true } });
+    await prisma.admin.update({ where: { id: a.id }, data: { mustChangePassword: true } }); // an old flag left in the database
     const s = await login('admin', { email: 'root@example.com', password: 'Sup3rSecretPass' });
-    const blocked = await s.get('/api/admins');
-    expect(blocked.status).toBe(403);
-    expect(blocked.body.error.code).toBe('PASSWORD_CHANGE_REQUIRED');
-    expect((await s.post('/api/system/mail/test').send({})).body.error.code).toBe('PASSWORD_CHANGE_REQUIRED');
-    expect((await s.get('/api/auth/me')).body.data.user.mustChangePassword).toBe(true);
-    expect((await s.post('/api/auth/change-password').send({ currentPassword: 'Sup3rSecretPass', newPassword: 'Brand9NewAdminPw' })).status).toBe(200);
     expect((await s.get('/api/admins')).status).toBe(200);
+    expect((await s.post('/api/auth/change-password').send({ currentPassword: 'Sup3rSecretPass', newPassword: 'Brand9NewAdminPw' })).status).toBe(200);
   });
 });
 
